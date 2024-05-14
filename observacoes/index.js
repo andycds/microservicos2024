@@ -1,9 +1,22 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const mysql = require('mysql2');
+require("dotenv").config();
 const app = express();
 app.use(express.json());
 const observacoesPorLembreteId = {};
+
+const { DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE } = process.env;
+const pool = mysql.createPool({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+}).promise();
 
 app.post('/lembretes/:id/observacoes', async (req, res) => {
     // Gerar um novo identificador para a observação a ser inserida.
@@ -29,7 +42,17 @@ app.post('/lembretes/:id/observacoes', async (req, res) => {
 });
 
 app.get('/lembretes/:id/observacoes', (req, res) => {
-    res.send(observacoesPorLembreteId[req.params.id] || []);
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from observacao where lembrete_id = ?;', [req.params.id]);
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
+    // res.send(observacoesPorLembreteId[req.params.id] || []);
 });
 
 app.post('/eventos', (req, res) => {

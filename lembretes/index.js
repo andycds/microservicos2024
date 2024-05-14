@@ -1,20 +1,55 @@
 const express = require('express');
 const axios = require('axios');
+const mysql = require('mysql2');
+require("dotenv").config();
 const app = express();
 app.use(express.json());
-const lembretes = {};
 contador = 0;
 
+const { DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE } = process.env;
+const pool = mysql.createPool({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+}).promise();
+pool.getConnection()
+    .then((conn) => {
+        const results = conn.query("select max(id) id from lembrete;");
+        conn.release();
+        return results;
+    }).then((results) => {
+        contador = results[0][0].id || 0;
+    }).catch((err) => {
+        console.log(err);
+    });
+
 app.get('/lembretes', (req, res) => {
-    res.send(lembretes);
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from lembrete;');
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
 });
 
 app.post('/lembretes', async (req, res) => {
     contador++;
     const { texto } = req.body;
-    lembretes[contador] = {
-        contador, texto
-    };
+    pool.getConnection()
+        .then((conn) => {
+            conn.query("insert into lembrete (id, texto) values (?, ?);", [contador, texto]);
+            conn.release();
+        }).catch((err) => {
+            console.log(err);
+        });
     await axios.post('http://localhost:10000/eventos', {
         tipo: "LembreteCriado",
         dados: {
@@ -22,7 +57,7 @@ app.post('/lembretes', async (req, res) => {
             texto
         }
     });
-    res.status(201).send(lembretes[contador]);
+    res.status(201).send({ contador, texto });
 });
 
 app.post('/eventos', (req, res) => {
