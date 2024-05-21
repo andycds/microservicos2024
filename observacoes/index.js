@@ -18,6 +18,28 @@ const pool = mysql.createPool({
     queueLimit: 0,
 }).promise();
 
+const funcoes = {
+    ObservacaoClassificada: (observacao) => {
+        console.log("chegou observação classificada, atualizar")
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("update observacao set status = ? where id = ?;", [observacao.status, observacao.id]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
+        axios.post("http://localhost:10000/eventos", {
+            tipo: "ObservacaoAtualizada",
+            dados: {
+                id: observacao.id,
+                texto: observacao.texto,
+                lembreteId: observacao.lembreteId,
+                status: observacao.status,
+            }
+        });
+    }
+}
+
 app.post('/lembretes/:id/observacoes', async (req, res) => {
     // Gerar um novo identificador para a observação a ser inserida.
     const idObs = uuidv4();
@@ -26,19 +48,36 @@ app.post('/lembretes/:id/observacoes', async (req, res) => {
     // Verificar se o id de lembrete existente na URL já existe na base e está
     // associado a uma coleção.Em caso positivo, prosseguir utilizando a coleção
     //     existente.Caso contrário, criar uma nova coleção.
-    const observacoesDoLembrete = observacoesPorLembreteId[req.params.id] || [];
+    //const observacoesDoLembrete = observacoesPorLembreteId[req.params.id] || [];
     // Adicionar a nova observação à coleção de observações recém obtida / criada
-    observacoesDoLembrete.push({ id: idObs, texto });
+    //observacoesDoLembrete.push({ id: idObs, texto, status: "aguardando" });
     // Fazer com que o identificador do lembrete existente na URL esteja associado a essa nova coleção alterada, na base de observações por id de lembrete
-    observacoesPorLembreteId[req.params.id] = observacoesDoLembrete;
+    //observacoesPorLembreteId[req.params.id] = observacoesDoLembrete;
+    pool.getConnection()
+        .then((conn) => {
+            conn.query("insert into observacao (id, lembrete_id, texto, status) values (?, ?, ?, ?);", [idObs, req.params.id, texto, 'aguardando']);
+            conn.release();
+        }).catch((err) => {
+            console.log(err);
+        });
     // Devolver uma resposta ao usuário envolvendo o código de status HTTP e algum objeto de interesse, possivelmente a observação inserida ou, ainda, a coleção inteira de observações
     await axios.post('http://localhost:10000/eventos', {
         tipo: "ObservacaoCriada",
         dados: {
-            id: idObs, texto, lembreteId: req.params.id
+            id: idObs, texto, lembreteId: req.params.id, status: 'aguardando'
         }
     });
-    res.status(201).send(observacoesDoLembrete);
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from observacao where lembrete_id = ?;', [req.params.id]);
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.status(201).json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
+    //res.status(201).send(observacoesDoLembrete);
 });
 
 app.get('/lembretes/:id/observacoes', (req, res) => {
@@ -56,7 +95,10 @@ app.get('/lembretes/:id/observacoes', (req, res) => {
 });
 
 app.post('/eventos', (req, res) => {
-    console.log(req.body);
+    console.log("Chegou evento: " + req.body.tipo);
+    try {
+        funcoes[req.body.tipo](req.body.dados);
+    } catch (err) { }
     res.send({ msg: "ok" });
 });
 
