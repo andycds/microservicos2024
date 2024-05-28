@@ -80,6 +80,34 @@ app.post('/lembretes/:id/observacoes', async (req, res) => {
     //res.status(201).send(observacoesDoLembrete);
 });
 
+app.delete('/lembretes/:id/observacoes/', async (req, res) => {
+    const { idObs } = req.body;
+    console.log(idObs)
+    pool.getConnection()
+        .then((conn) => {
+            conn.query("delete from observacao where id like ?;", [idObs]);
+            conn.release();
+        }).catch((err) => {
+            console.log(err);
+        });
+    await axios.post('http://localhost:10000/eventos', {
+        tipo: "ObservacaoApagada",
+        dados: {
+            lembreteId: req.params.id, id: idObs
+        }
+    });
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from observacao where lembrete_id = ?;', [req.params.id]);
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
+});
+
 app.get('/lembretes/:id/observacoes', (req, res) => {
     pool.getConnection()
         .then((conn) => {

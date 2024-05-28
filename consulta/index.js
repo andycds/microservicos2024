@@ -17,6 +17,11 @@ const funcoes = {
         const indice = observacoes.findIndex((o) => o.id === observacao.id);
         observacoes[indice] = observacao;
     },
+    ObservacaoApagada: (observacao) => {
+        const observacoes = baseConsulta[observacao.lembreteId]["observacoes"];
+        const indice = observacoes.findIndex((o) => o.id === observacao.id);
+        observacoes.splice(indice, 1);
+    }
 };
 
 app.get("/lembretes", (req, res) => {
