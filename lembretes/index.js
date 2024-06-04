@@ -60,6 +60,33 @@ app.post('/lembretes', async (req, res) => {
     res.status(201).send({ contador, texto });
 });
 
+app.delete('/lembretes/', async (req, res) => {
+    const { id } = req.body;
+    pool.getConnection()
+        .then((conn) => {
+            conn.query("delete from lembrete where id = ?;", [id]);
+            conn.release();
+        }).catch((err) => {
+            console.log(err);
+        });
+    await axios.post('http://localhost:10000/eventos', {
+        tipo: "LembreteApagado",
+        dados: {
+            id: id
+        }
+    });
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from lembrete;');
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
+});
+
 app.post('/eventos', (req, res) => {
     console.log(req.body);
     res.send({ msg: "ok" });

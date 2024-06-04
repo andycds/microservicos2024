@@ -11,7 +11,18 @@ const funcoes = {
             observacao.texto.includes(palavraChave)
                 ? "importante"
                 : "comum";
-        console.log("Observação classifcada: " + observacao.status);
+        console.log("Observação classificada: " + observacao.status);
+        await axios.post("http://localhost:10000/eventos", {
+            tipo: 'ObservacaoClassificada',
+            dados: observacao,
+        });
+    },
+    ObservacaoAlterada: async (observacao) => {
+        observacao.status =
+            observacao.texto.includes(palavraChave)
+                ? "importante"
+                : "comum";
+        console.log("Observação classificada: " + observacao.status);
         await axios.post("http://localhost:10000/eventos", {
             tipo: 'ObservacaoClassificada',
             dados: observacao,

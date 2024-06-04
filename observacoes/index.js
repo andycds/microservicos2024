@@ -37,8 +37,47 @@ const funcoes = {
                 status: observacao.status,
             }
         });
-    }
+    },
+    LembreteApagado: (lembrete) => {
+        console.log("LembreteApagado ->" + lembrete.id);
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("delete from observacao where lembrete_id = ?;", [lembrete.id]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
+    },
 }
+
+app.put('/lembretes/:id/observacoes', async (req, res) => {
+    const { id, texto } = req.body;
+    console.log("id:" + id);
+    console.log("texto:" + texto);
+    pool.getConnection()
+        .then((conn) => {
+            conn.query("update observacao set texto = ? where id = ?;", [texto, id]);
+            conn.release();
+        }).catch((err) => {
+            console.log(err);
+        });
+    await axios.post('http://localhost:10000/eventos', {
+        tipo: "ObservacaoAlterada",
+        dados: {
+            id: id, texto, lembreteId: req.params.id, status: 'aguardando'
+        }
+    });
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from observacao where lembrete_id = ?;', [req.params.id]);
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.status(201).json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
+});
 
 app.post('/lembretes/:id/observacoes', async (req, res) => {
     // Gerar um novo identificador para a observação a ser inserida.

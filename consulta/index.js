@@ -21,6 +21,9 @@ const funcoes = {
         const observacoes = baseConsulta[observacao.lembreteId]["observacoes"];
         const indice = observacoes.findIndex((o) => o.id === observacao.id);
         observacoes.splice(indice, 1);
+    },
+    LembreteApagado: (lembrete) => {
+        delete baseConsulta[lembrete.id];
     }
 };
 
