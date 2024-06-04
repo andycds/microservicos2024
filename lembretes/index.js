@@ -40,6 +40,34 @@ app.get('/lembretes', (req, res) => {
         })
 });
 
+app.put('/lembretes', async (req, res) => {
+    const { id, texto } = req.body;
+    pool.getConnection()
+        .then((conn) => {
+            conn.query("update lembrete set texto = ? where id = ?;", [texto, id]);
+            conn.release();
+        }).catch((err) => {
+            console.log(err);
+        });
+    await axios.post('http://localhost:10000/eventos', {
+        tipo: "LembreteAlterado",
+        dados: {
+            id,
+            texto
+        }
+    });
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select * from lembrete;');
+            conn.release();
+            return results;
+        }).then((results) => {
+            res.json(results[0]);
+        }).catch((err) => {
+            console.log(err);
+        })
+});
+
 app.post('/lembretes', async (req, res) => {
     contador++;
     const { texto } = req.body;
