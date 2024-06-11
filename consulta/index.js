@@ -1,44 +1,128 @@
 const express = require("express");
+const mysql = require('mysql2');
+require("dotenv").config();
 const app = express();
 app.use(express.json());
-const baseConsulta = {};
+
+const { DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE } = process.env;
+const pool = mysql.createPool({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+}).promise();
+
+/*
+CREATE TABLE IF NOT EXISTS lembrete (
+    id int primary key not null,
+    texto varchar(200) not null
+);
+
+CREATE TABLE IF NOT EXISTS observacao (
+    id varchar(36) primary key not null,
+    lembrete_id int not null,
+    texto varchar(200) not null,
+    status varchar(30) not null
+);
+*/
 
 const funcoes = {
     LembreteCriado: (lembrete) => {
-        baseConsulta[lembrete.contador] = lembrete;
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("insert into lembrete (id, texto) values (?, ?);", [lembrete.contador, lembrete.texto]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
     },
     LembreteAlterado: (lembrete) => {
-        baseConsulta[lembrete.id]["texto"] = lembrete.texto;
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("update lembrete set texto = ? where id = ?;", [lembrete.texto, lembrete.id]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
     },
     ObservacaoCriada: (observacao) => {
-        const observacoes = baseConsulta[observacao.lembreteId]["observacoes"] || [];
-        observacoes.push(observacao);
-        baseConsulta[observacao.lembreteId]["observacoes"] = observacoes;
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("insert into observacao (id, lembrete_id, texto, status) values (?, ?, ?, ?);", [observacao.id, observacao.lembreteId, observacao.texto, observacao.status]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
     },
     ObservacaoAtualizada: (observacao) => {
-        const observacoes = baseConsulta[observacao.lembreteId]["observacoes"];
-        const indice = observacoes.findIndex((o) => o.id === observacao.id);
-        observacoes[indice] = observacao;
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("update observacao set texto = ?, status = ? where id = ?;", [observacao.texto, observacao.status, observacao.id]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
     },
     ObservacaoApagada: (observacao) => {
-        const observacoes = baseConsulta[observacao.lembreteId]["observacoes"];
-        const indice = observacoes.findIndex((o) => o.id === observacao.id);
-        observacoes.splice(indice, 1);
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("delete from observacao where id like ?;", [observacao.id]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
     },
     LembreteApagado: (lembrete) => {
-        delete baseConsulta[lembrete.id];
+        pool.getConnection()
+            .then((conn) => {
+                conn.query("delete from lembrete where id = ?;", [lembrete.id]);
+                conn.release();
+            }).catch((err) => {
+                console.log(err);
+            });
     }
 };
 
 app.get("/lembretes", (req, res) => {
-    res.send(baseConsulta);
+    const resultado = {};
+    pool.getConnection()
+        .then((conn) => {
+            const results = conn.query('select l.id idLembrete, l.texto textoLembrete, o.id idObservacao, o.texto textoObservacao, o.status from lembrete l left join observacao o on l.id = o.lembrete_id;');
+            conn.release();
+            return results;
+        }).then((results) => {
+            results[0].forEach(row => {
+                // se o lembrete ainda não existe no resultado, adicione
+                if (!resultado[row.idLembrete]) {
+                    resultado[row.idLembrete] = {
+                        id: row.idLembrete,
+                        texo: row.textoLembrete,
+                        observacoes: []
+                    }
+                }
+                // se tem uma observação naquela linha, adicione-a no lembrete
+                if (row.idObservacao) {
+                    resultado[row.idLembrete].observacoes.push({
+                        id: row.idObservacao,
+                        texto: row.textoObservacao,
+                        status: row.status
+                    });
+                }
+            });
+            res.json(resultado);
+        }).catch((err) => {
+            console.log(err);
+        })
 });
 
 app.post("/eventos", (req, res) => {
     try {
         funcoes[req.body.tipo](req.body.dados);
     } catch (err) { }
-    res.send(baseConsulta);
+    res.send("ok");
 });
 
 app.listen(6000, () => console.log("Consulta. Porta 6000"));
